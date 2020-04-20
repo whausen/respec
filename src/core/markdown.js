@@ -69,6 +69,47 @@ class Renderer extends marked.Renderer {
     }
     return super.heading(text, level, raw, slugger);
   }
+
+  /**
+   * @param {string} text
+   */
+  paragraph(text) {
+    if (/^\s*:/.test(text)) {
+      return renderDefinitionList(text);
+    }
+    return `<p>${text}</p>`;
+  }
+}
+
+/**
+ * @param {string} text
+ */
+function renderDefinitionList(text) {
+  const lines = text.split("\n").map(s => s.trimStart());
+  /** @type {{ type: "dd" | "dt" | "text", value: string }[]} */
+  const tokens = [];
+  for (const line of lines) {
+    if (line.startsWith(":: ")) {
+      tokens.push({ type: "dd", value: line.replace(/^::\s+/, "") });
+    } else if (line.startsWith(": ")) {
+      tokens.push({ type: "dt", value: line.replace(/^:\s+/, "") });
+    } else {
+      tokens.push({ type: "text", value: line });
+    }
+  }
+
+  let html = `<dl>\n`;
+  for (let i = 0; i < tokens.length; ) {
+    const { type } = tokens[i];
+    if (type !== "text") html += `<${type}>`;
+    do {
+      html += tokens[i].value;
+      i++;
+    } while (i < tokens.length && tokens[i].type == "text");
+    if (type !== "text") html += `</${type}>`;
+  }
+  html += `</dl>`;
+  return html;
 }
 
 /**
