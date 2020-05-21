@@ -454,7 +454,9 @@ function showErrors({ ambiguous, notFound }) {
     const msg =
       `Couldn't match "**${originalTerm}**" to anything in the document or in any other document cited in this specification: ${specsString}. ` +
       `See [how to cite to resolve the error](${formUrl})`;
-    showInlineError(elems, msg, "Error: No matching dfn found.");
+    showInlineError(elems, msg, "Error: No matching dfn found.", {
+      module: name,
+    });
   }
 
   for (const { query, elems, results } of ambiguous.values()) {

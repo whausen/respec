@@ -48,20 +48,20 @@ async function writeTo(outPath, data) {
  * @param  {String} src         A URL that is the ReSpec source.
  * @param  {String|null|""} out A path to write to. If null, goes to stdout.
  *                              If "", then don't write, just return value.
- * @param  {Object} whenToHalt  Object with two bool props (haltOnWarn,
- *                              haltOnError), allowing execution to stop
- *                              if either occurs.
  * @param  {Number} timeout     Optional. Milliseconds before NightmareJS
  *                              should timeout.
  * @return {Promise}            Resolves with HTML when done writing.
  *                              Rejects on errors.
  */
-async function fetchAndWrite(
-  src,
-  out,
-  whenToHalt,
-  { timeout = 300000, disableSandbox = false, debug = false } = {}
-) {
+async function fetchAndWrite(src, out, options = {}) {
+  const {
+    timeout = 300000,
+    disableSandbox = false,
+    debug = false,
+    onError = () => {},
+    onWarning = () => {},
+    beforeWrite = () => {},
+  } = options;
   const timer = createTimer(timeout);
 
   const userDataDir = await mkdtemp(`${os.tmpdir()}/respec2html-`);
@@ -73,12 +73,17 @@ async function fetchAndWrite(
   });
   try {
     const page = await browser.newPage();
-    const handleConsoleMessages = makeConsoleMsgHandler(page);
-    const haltFlags = {
-      error: false,
-      warn: false,
-    };
-    handleConsoleMessages(haltFlags);
+    await page.exposeFunction("onRespecErrorOrWarning", e => {
+      if (e.type === "respecerror") return onError(e.detail);
+      if (e.type === "respecwarn") return onWarning(e.detail);
+    });
+    page.evaluateOnNewDocument(() => {
+      for (const evName of ["respecwarn", "respecerror"]) {
+        document.addEventListener(evName, e => {
+          window.onRespecErrorOrWarning({ type: evName, detail: e.detail });
+        });
+      }
+    });
     const url = new URL(src);
     const response = await page.goto(url, { timeout });
     if (
@@ -93,11 +98,7 @@ async function fetchAndWrite(
     }
     await checkIfReSpec(page);
     const html = await generateHTML(page, url, timer);
-    const abortOnWarning = whenToHalt.haltOnWarn && haltFlags.warn;
-    const abortOnError = whenToHalt.haltOnError && haltFlags.error;
-    if (abortOnError || abortOnWarning) {
-      process.exit(1);
-    }
+    await beforeWrite();
     switch (out) {
       case null:
         process.stdout.write(html);
@@ -107,8 +108,6 @@ async function fetchAndWrite(
       default:
         await writeTo(out, html);
     }
-    // Race condition: Wait before page close for all console messages to be logged
-    await new Promise(resolve => setTimeout(resolve, 1000));
     await page.close();
     return html;
   } finally {
@@ -218,61 +217,6 @@ function getVersion() {
     return [123456789, 0, 0];
   }
   return window.respecVersion.split(".").map(str => parseInt(str, 10));
-}
-/**
- * Handles messages from the browser's Console API.
- *
- * @param  {import("puppeteer").Page} page Instance of page to listen on.
- * @return {Function}
- */
-function makeConsoleMsgHandler(page) {
-  /**
-   * Specifies what to do when the browser emits "error" and "warn" console
-   * messages.
-   *
-   * @param  {Object} whenToHalt Object with two bool props (haltOnWarn,
-   *                             haltOnError), allowing execution to stop
-   *                             if either occurs.
-   * @return {Void}
-   */
-  return function handleConsoleMessages(haltFlags) {
-    page.on("console", async message => {
-      const args = await Promise.all(message.args().map(stringifyJSHandle));
-      const msgText = message.text();
-      const text = args.filter(msg => msg !== "undefined").join(" ");
-      const type = message.type();
-      if (
-        (type === "error" || type === "warning") &&
-        msgText && // browser errors have text
-        !message.args().length // browser errors/warnings have no arguments
-      ) {
-        // Since Puppeteer 1.4 reports _all_ errors, including CORS
-        // violations and slow preloads. Unfortunately, there is no way to distinguish
-        // these errors from other errors, so using this ugly hack.
-        // https://github.com/GoogleChrome/puppeteer/issues/1939
-        return;
-      }
-      const output = `ReSpec ${type}: ${colors.debug(text)}`;
-      switch (type) {
-        case "error":
-          console.error(colors.error(`😱 ${output}`));
-          haltFlags.error = true;
-          break;
-        case "warning":
-          // Ignore polling of respecDone
-          if (/document\.respecDone/.test(text)) {
-            return;
-          }
-          console.warn(colors.warn(`🚨 ${output}`));
-          haltFlags.warn = true;
-          break;
-      }
-    });
-  };
-}
-
-async function stringifyJSHandle(handle) {
-  return await handle.executionContext().evaluate(o => String(o), handle);
 }
 
 function createTimer(duration) {

@@ -83,11 +83,10 @@ export function run(conf) {
   }
   // Warn when there are RFC2119/RFC8174 keywords, but not conformance section
   if (!conformance && Object.keys(rfc2119Usage).length) {
-    pub(
-      "warn",
+    const message =
       "Document uses RFC2119 keywords but lacks a conformance section. " +
-        'Please add a `<section id="conformance">`.'
-    );
+      'Please add a `<section id="conformance">`.';
+    pub("warn", { module: name, message });
   }
   // Added message for legacy compat with Aria specs
   // See https://github.com/w3c/respec/issues/793

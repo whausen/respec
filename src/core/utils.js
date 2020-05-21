@@ -145,11 +145,12 @@ export function showInlineWarning(elems, msg, title, options = {}) {
  * @param {String} title error message to add on each element
  * @param {object} [options]
  * @param {string} [options.details]
+ * @param {string} [options.module]
  */
 export function showInlineError(elems, msg, title, options = {}) {
   if (!Array.isArray(elems)) elems = [elems];
   const message = getErrorMessage(elems, msg, title, options);
-  pub("error", message);
+  pub("error", { message, module: options.module });
   console.error(msg, elems);
 }
 

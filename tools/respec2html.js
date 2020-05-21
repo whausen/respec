@@ -127,16 +127,30 @@ const usageSections = [
     return process.exit(0);
   }
   const src = new URL(parsedArgs.src, `file://${process.cwd()}/`).href;
-  const whenToHalt = {
-    haltOnError: parsedArgs.haltonerror,
-    haltOnWarn: parsedArgs.haltonwarn,
-  };
   const out = parsedArgs.out;
   try {
-    await fetchAndWrite(src, out, whenToHalt, {
+    const warnings = [];
+    const errors = [];
+    await fetchAndWrite(src, out, {
       timeout: parsedArgs.timeout * 1000,
       disableSandbox: parsedArgs["disable-sandbox"],
       debug: parsedArgs.debug,
+      onError(error) {
+        console.error(colors.error(error));
+        errors.push(error);
+        // parsedArgs.haltonerror && process.exit(1);
+      },
+      onWarning(warning) {
+        console.warn(colors.warn(warning));
+        warnings.push(warning);
+        // parsedArgs.haltonwarn && process.exit(1);
+      },
+      beforeWrite() {
+        if (errors.length || warnings.length) {
+          console.log("😱");
+          process.exit(1);
+        }
+      },
     });
   } catch (err) {
     console.error(colors.error(err.stack));

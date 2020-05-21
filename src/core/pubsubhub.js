@@ -75,10 +75,12 @@ export function unsub({ topic, cb }) {
 }
 
 sub("error", err => {
+  document.dispatchEvent(new CustomEvent("respecerror", { detail: err }));
   console.error(err, err.stack);
 });
 
 sub("warn", str => {
+  document.dispatchEvent(new CustomEvent("respecwarn", { detail: str }));
   console.warn(str);
 });
 
