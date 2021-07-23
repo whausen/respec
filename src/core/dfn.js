@@ -21,6 +21,7 @@ import { sub } from "./pubsubhub.js";
 
 export const name = "core/dfn";
 
+/** @type {Map<string, { requiresFor: boolean, validator?: (...args: any[])=> boolean,  associateWith?: string}>}  */
 const knownTypesMap = new Map([
   ["abstract-op", { requiresFor: false }],
   ["attribute", { requiresFor: false, validator: validateDOMName }],
